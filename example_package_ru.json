@@ -1,0 +1,64 @@
+{
+  "questions": [
+    {
+      "id": "q1",
+      "question": "Решите уравнение: $2x + 5 = 17$",
+      "option_a": "$x = 5$",
+      "option_b": "$x = 6$",
+      "option_c": "$x = 7$",
+      "option_d": "$x = 8$",
+      "correct_option": "B",
+      "explanation": "Переносим 5 в правую часть: $2x = 12$, затем делим на 2: $x = 6$.",
+      "topic": "Линейные уравнения",
+      "difficulty": "Базовый"
+    },
+    {
+      "id": "q2",
+      "question": "Найдите производную функции: $f(x) = x^3 - 4x$",
+      "option_a": "$f'(x) = 3x^2 - 4$",
+      "option_b": "$f'(x) = x^2 - 4$",
+      "option_c": "$f'(x) = 3x^2$",
+      "option_d": "$f'(x) = 3x - 4$",
+      "correct_option": "A",
+      "explanation": "По правилу степени: $(x^3)' = 3x^2$, $(4x)' = 4$, значит $f'(x) = 3x^2 - 4$.",
+      "topic": "Производная",
+      "difficulty": "Средний"
+    },
+    {
+      "id": "q3",
+      "question": "Вычислите: $\\int_0^1 2x\\,dx$",
+      "option_a": "$0$",
+      "option_b": "$\\frac{1}{2}$",
+      "option_c": "$1$",
+      "option_d": "$2$",
+      "correct_option": "C",
+      "explanation": "Первообразная: $x^2$. Подстановка пределов: $x^2\\big|_0^1 = 1 - 0 = 1$.",
+      "topic": "Интеграл",
+      "difficulty": "Средний"
+    },
+    {
+      "id": "q4",
+      "question": "Найдите значение выражения: $\\sin^2 x + \\cos^2 x$",
+      "option_a": "$0$",
+      "option_b": "$1$",
+      "option_c": "$2$",
+      "option_d": "$\\sin x + \\cos x$",
+      "correct_option": "B",
+      "explanation": "По основному тригонометрическому тождеству: $\\sin^2 x + \\cos^2 x = 1$.",
+      "topic": "Тригонометрия",
+      "difficulty": "Базовый"
+    },
+    {
+      "id": "q5",
+      "question": "Решите квадратное уравнение: $x^2 - 5x + 6 = 0$",
+      "option_a": "$x_1 = 1,\\; x_2 = 6$",
+      "option_b": "$x_1 = -2,\\; x_2 = -3$",
+      "option_c": "$x_1 = 2,\\; x_2 = 3$",
+      "option_d": "$x = 5$",
+      "correct_option": "C",
+      "explanation": "Разложим на множители: $x^2 - 5x + 6 = (x-2)(x-3)$. Отсюда корни $x=2$ и $x=3$.",
+      "topic": "Квадратные уравнения",
+      "difficulty": "Средний"
+    }
+  ]
+}
