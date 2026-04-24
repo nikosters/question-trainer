@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -278,6 +279,11 @@ class PackageStorage {
 
     allReviewData.remove(packageId);
     await prefs.setString(_reviewPrefsKey, jsonEncode(allReviewData));
+  }
+
+  @visibleForTesting
+  List<QuestionItem> parseQuestionsForTesting(String jsonContent) {
+    return _parseQuestions(jsonContent);
   }
 
   Future<void> _savePackages(List<QuestionPackageMeta> packages) async {

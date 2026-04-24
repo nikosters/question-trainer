@@ -133,4 +133,37 @@ void main() {
     expect(prefs.getString('ege_quiz_review_v1'), isNull);
     expect(prefs.getString('question_quiz_review_v1'), isNotNull);
   });
+
+  test('parseQuestionsForTesting rejects duplicate question ids', () {
+    final storage = PackageStorage();
+    final package = jsonEncode({
+      'questions': [
+        {
+          'id': 'q_1',
+          'question': 'Первый вопрос',
+          'option_a': 'A',
+          'option_b': 'B',
+          'option_c': 'C',
+          'option_d': 'D',
+          'correct_option': 'A',
+          'explanation': 'Объяснение',
+        },
+        {
+          'id': 'q_1',
+          'question': 'Второй вопрос',
+          'option_a': 'A',
+          'option_b': 'B',
+          'option_c': 'C',
+          'option_d': 'D',
+          'correct_option': 'A',
+          'explanation': 'Объяснение',
+        },
+      ],
+    });
+
+    expect(
+      () => storage.parseQuestionsForTesting(package),
+      throwsFormatException,
+    );
+  });
 }
