@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:question_trainer/models/question_package_meta.dart';
 import 'package:question_trainer/models/quiz_progress.dart';
@@ -75,6 +76,8 @@ class _PackageListPageState extends State<PackageListPage> {
       final actionText = existing == null ? 'добавлен' : 'обновлен';
       _showMessage('Пакет "$result" $actionText');
       await _loadPackages();
+    } on PackageValidationException catch (e) {
+      await _showImportError(e);
     } catch (e) {
       _showMessage('Ошибка импорта: $e');
     }
@@ -249,6 +252,36 @@ class _PackageListPageState extends State<PackageListPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showImportError(PackageValidationException error) async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ошибка импорта'),
+        content: SingleChildScrollView(child: Text(error.message)),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: error.message));
+              if (!mounted) {
+                return;
+              }
+              _showMessage('Ошибка скопирована');
+            },
+            child: const Text('Скопировать'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

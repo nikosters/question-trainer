@@ -133,4 +133,96 @@ void main() {
     expect(prefs.getString('ege_quiz_review_v1'), isNull);
     expect(prefs.getString('question_quiz_review_v1'), isNotNull);
   });
+
+  test('validatePackageForTesting returns all question errors', () {
+    final storage = PackageStorage();
+    final package = jsonEncode({
+      'questions': [
+        {
+          'id': 'q_1',
+          'question': 'Первый вопрос',
+          'option_b': 'B',
+          'option_c': 'C',
+          'option_d': 'D',
+          'correct_option': 'A',
+          'explanation': 'Объяснение',
+        },
+        {
+          'id': 'q_2',
+          'question': 'Второй вопрос',
+          'option_a': 'A',
+          'option_b': 'B',
+          'option_c': 'C',
+          'option_d': 'D',
+          'correct_option': 'E',
+          'explanation': 'Объяснение',
+        },
+      ],
+    });
+
+    final result = storage.validatePackageForTesting(package);
+
+    expect(result.isValid, isFalse);
+    expect(result.errors, hasLength(greaterThan(1)));
+    expect(result.message, contains('questions[0]'));
+    expect(result.message, contains('questions[1]'));
+  });
+
+  test('validatePackageForTesting rejects invalid json syntax', () {
+    final storage = PackageStorage();
+
+    final result = storage.validatePackageForTesting('{"questions": [');
+
+    expect(result.isValid, isFalse);
+    expect(result.message, startsWith('JSON:'));
+  });
+
+  test('validatePackageForTesting reports duplicate ids', () {
+    final storage = PackageStorage();
+    final package = jsonEncode({
+      'questions': [
+        _validQuestionJson(id: 'q_1', question: 'Первый вопрос'),
+        _validQuestionJson(id: 'q_1', question: 'Второй вопрос'),
+      ],
+    });
+
+    final result = storage.validatePackageForTesting(package);
+
+    expect(result.isValid, isFalse);
+    expect(
+      result.errors,
+      contains('questions[1].id: повторяется значение "q_1".'),
+    );
+  });
+
+  test('parseQuestionsForTesting rejects duplicate question ids', () {
+    final storage = PackageStorage();
+    final package = jsonEncode({
+      'questions': [
+        _validQuestionJson(id: 'q_1', question: 'Первый вопрос'),
+        _validQuestionJson(id: 'q_1', question: 'Второй вопрос'),
+      ],
+    });
+
+    expect(
+      () => storage.parseQuestionsForTesting(package),
+      throwsFormatException,
+    );
+  });
+}
+
+Map<String, dynamic> _validQuestionJson({
+  required String id,
+  required String question,
+}) {
+  return {
+    'id': id,
+    'question': question,
+    'option_a': 'A',
+    'option_b': 'B',
+    'option_c': 'C',
+    'option_d': 'D',
+    'correct_option': 'A',
+    'explanation': 'Объяснение',
+  };
 }

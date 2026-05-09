@@ -59,6 +59,19 @@ GitHub Actions соберет APK и прикрепит его к GitHub Release
 question-trainer-v1.0.0-android-universal.apk
 ```
 
+## Nightly-релизы
+
+Nightly-релизы публикуются из ветки `nightly` workflow `Nightly Android APK`.
+Каждый push в `nightly` запускает проверки, собирает подписанный release APK и
+обновляет один moving pre-release с тегом `nightly`.
+
+Nightly использует те же Android signing secrets, что и стабильные релизы.
+Артефакт nightly-релиза:
+
+```text
+question-trainer-nightly-android-universal.apk
+```
+
 ## Ручной запуск
 
 Workflow `Release Android APK` можно запустить вручную через GitHub Actions. Для ручного запуска нужен ref, который указывает на нужный коммит или тег.

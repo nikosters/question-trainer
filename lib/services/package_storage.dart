@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -53,7 +54,10 @@ class PackageStorage {
     final file = picked.files.first;
     final bytes = await _extractBytes(file);
     final text = utf8.decode(bytes);
-    final parsed = _parseQuestions(text);
+    final validation = _validatePackage(text);
+    if (!validation.isValid) {
+      throw PackageValidationException(validation.message);
+    }
     final packageTitle = existing?.title ?? _titleFromFilename(file.name);
     final packageId = existing?.id ?? _uuid.v4();
 
@@ -67,7 +71,7 @@ class PackageStorage {
       id: packageId,
       title: packageTitle,
       fileName: saveFileName,
-      questionCount: parsed.length,
+      questionCount: validation.questions.length,
       updatedAt: DateTime.now(),
     );
 
@@ -280,6 +284,16 @@ class PackageStorage {
     await prefs.setString(_reviewPrefsKey, jsonEncode(allReviewData));
   }
 
+  @visibleForTesting
+  List<QuestionItem> parseQuestionsForTesting(String jsonContent) {
+    return _parseQuestions(jsonContent);
+  }
+
+  @visibleForTesting
+  PackageValidationResult validatePackageForTesting(String jsonContent) {
+    return _validatePackage(jsonContent);
+  }
+
   Future<void> _savePackages(List<QuestionPackageMeta> packages) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = packages.map((e) => e.toJson()).toList();
@@ -328,36 +342,80 @@ class PackageStorage {
   }
 
   List<QuestionItem> _parseQuestions(String jsonContent) {
-    final root = jsonDecode(jsonContent);
+    final validation = _validatePackage(jsonContent);
+    if (!validation.isValid) {
+      throw FormatException(validation.message);
+    }
+    return validation.questions;
+  }
+
+  PackageValidationResult _validatePackage(String jsonContent) {
+    final Object? root;
+    try {
+      root = jsonDecode(jsonContent);
+    } on FormatException catch (e) {
+      return PackageValidationResult(questions: const [], errors: ['JSON: $e']);
+    }
+
     if (root is! Map<String, dynamic>) {
-      throw const FormatException('Корень JSON должен быть объектом.');
+      return const PackageValidationResult(
+        questions: [],
+        errors: ['Корень JSON должен быть объектом.'],
+      );
     }
 
     final rawQuestions = root['questions'];
     if (rawQuestions is! List<dynamic>) {
-      throw const FormatException('Поле questions должно быть массивом.');
+      return const PackageValidationResult(
+        questions: [],
+        errors: ['Поле questions должно быть массивом.'],
+      );
     }
 
-    final ids = <String>{};
-    final result = <QuestionItem>[];
+    final errors = <String>[];
+    final questions = <QuestionItem>[];
+    final idsByValue = <String, int>{};
 
-    for (final item in rawQuestions) {
+    if (rawQuestions.isEmpty) {
+      errors.add('Поле questions не должно быть пустым.');
+    }
+
+    for (var i = 0; i < rawQuestions.length; i++) {
+      final item = rawQuestions[i];
       if (item is! Map<String, dynamic>) {
-        throw const FormatException('Каждый вопрос должен быть JSON-объектом.');
+        errors.add('questions[$i]: Каждый вопрос должен быть JSON-объектом.');
+        continue;
       }
 
-      final question = QuestionItem.fromJson(item);
-      if (!ids.add(question.id)) {
-        throw FormatException('Повторяющийся id в пакете: ${question.id}');
+      QuestionItem? question;
+      try {
+        question = QuestionItem.fromJson(item);
+        questions.add(question);
+      } on FormatException catch (e) {
+        errors.add('questions[$i]: ${e.message}');
       }
-      result.add(question);
+
+      final id = question?.id ?? _safeQuestionId(item);
+      if (id == null) {
+        continue;
+      }
+
+      if (idsByValue.containsKey(id)) {
+        errors.add('questions[$i].id: повторяется значение "$id".');
+      } else {
+        idsByValue[id] = i;
+      }
     }
 
-    if (result.isEmpty) {
-      throw const FormatException('Пакет не содержит вопросов.');
-    }
+    return PackageValidationResult(questions: questions, errors: errors);
+  }
 
-    return result;
+  String? _safeQuestionId(Map<String, dynamic> json) {
+    final value = json['id'];
+    if (value is! String || value.trim().isEmpty) {
+      return null;
+    }
+    return value.trim();
   }
 
   String _titleFromFilename(String name) {
@@ -367,6 +425,28 @@ class PackageStorage {
     }
     return name;
   }
+}
+
+class PackageValidationResult {
+  const PackageValidationResult({
+    required this.questions,
+    required this.errors,
+  });
+
+  final List<QuestionItem> questions;
+  final List<String> errors;
+
+  bool get isValid => errors.isEmpty;
+  String get message => errors.join('\n');
+}
+
+class PackageValidationException implements Exception {
+  const PackageValidationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 extension _IterableFirstOrNull<T> on Iterable<T> {
