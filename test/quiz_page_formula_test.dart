@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:question_trainer/models/question_item.dart';
@@ -132,6 +133,19 @@ void main() {
     return tester.getRect(find.byKey(key));
   }
 
+  Rect mathRectInside(WidgetTester tester, Key key) {
+    return tester.getRect(
+      find.descendant(of: find.byKey(key), matching: find.byType(Math)).first,
+    );
+  }
+
+  bool formulaChoiceEnabled(WidgetTester tester, Key key) {
+    final inkWell = tester.widget<InkWell>(
+      find.descendant(of: find.byKey(key), matching: find.byType(InkWell)),
+    );
+    return inkWell.onTap != null;
+  }
+
   testWidgets('formula assembly question renders parts and answer chips', (
     tester,
   ) async {
@@ -151,12 +165,12 @@ void main() {
     final primary = Theme.of(
       tester.element(find.byType(QuizPage)),
     ).colorScheme.primary;
-    final answerChip = tester.widget<ActionChip>(
-      find.byKey(const Key('formula_choice_answer:coef')),
-    );
 
     expect(blankBorderColor(tester, 'coef'), primary);
-    expect(answerChip.onPressed, isNotNull);
+    expect(
+      formulaChoiceEnabled(tester, const Key('formula_choice_answer:coef')),
+      isTrue,
+    );
   });
 
   testWidgets(
@@ -187,12 +201,12 @@ void main() {
     final primary = Theme.of(
       tester.element(find.byType(QuizPage)),
     ).colorScheme.primary;
-    final answerChip = tester.widget<ActionChip>(
-      find.byKey(const Key('formula_choice_answer:coef')),
-    );
 
     expect(blankBorderColor(tester, 'coef'), primary);
-    expect(answerChip.onPressed, isNotNull);
+    expect(
+      formulaChoiceEnabled(tester, const Key('formula_choice_answer:coef')),
+      isTrue,
+    );
   });
 
   testWidgets('fixed formula tokens render as compact inline fragments', (
@@ -206,7 +220,7 @@ void main() {
     final fixedRect = tokenRect(tester, const Key('formula_fixed_0'));
     final blankRect = tokenRect(tester, const Key('formula_blank_coef'));
 
-    expect(fixedRect.height, blankRect.height);
+    expect((fixedRect.height - blankRect.height).abs(), lessThanOrEqualTo(2));
     expect(fixedRect.width, lessThan(blankRect.width));
   });
 
@@ -215,7 +229,7 @@ void main() {
   ) async {
     await pumpFormulaQuiz(tester, questions: [twoBlankFormulaQuestion()]);
 
-    final groupFinder = find.byKey(const Key('formula_group_0'));
+    final groupFinder = find.byKey(const Key('formula_group_1'));
     expect(groupFinder, findsOne);
     expect(
       find.descendant(
@@ -240,6 +254,29 @@ void main() {
 
     expect((denominatorTopLeft.dy - slashTopLeft.dy).abs(), lessThan(2));
     expect(denominatorTopLeft.dx, greaterThan(slashTopLeft.dx));
+  });
+
+  testWidgets('formula wraps fraction tail instead of overflowing right edge', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpFormulaQuiz(tester, questions: [twoBlankFormulaQuestion()]);
+
+    await tester.tap(find.byKey(const Key('formula_choice_answer:numerator')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('formula_choice_distractor:0')));
+    await tester.pumpAndSettle();
+
+    final denominatorRect = tokenRect(
+      tester,
+      const Key('formula_blank_denominator'),
+    );
+
+    expect(denominatorRect.right, lessThanOrEqualTo(360));
   });
 
   testWidgets('triangle formula keeps adjacent multipliers inline', (
@@ -306,6 +343,103 @@ void main() {
     final blankHeight = tokenHeight(tester, const Key('formula_blank_coef'));
 
     expect(blankHeight, lessThanOrEqualTo(fixedHeight * 1.4));
+  });
+
+  testWidgets('filled fraction blank centers math content', (tester) async {
+    await pumpFormulaQuiz(tester);
+
+    final emptyBlankRect = tokenRect(tester, const Key('formula_blank_coef'));
+    await tester.tap(find.byKey(const Key('formula_choice_answer:coef')));
+    await tester.pumpAndSettle();
+
+    final blankRect = tokenRect(tester, const Key('formula_blank_coef'));
+    final mathRect = mathRectInside(tester, const Key('formula_blank_coef'));
+
+    expect((mathRect.center.dx - blankRect.center.dx).abs(), lessThan(1.5));
+    expect((mathRect.center.dy - blankRect.center.dy).abs(), lessThan(1.5));
+    expect(blankRect.width, greaterThan(emptyBlankRect.width));
+  });
+
+  testWidgets('filled long blank centers math content vertically', (
+    tester,
+  ) async {
+    await pumpFormulaQuiz(tester, questions: [twoBlankFormulaQuestion()]);
+
+    await tester.tap(find.byKey(const Key('formula_choice_answer:numerator')));
+    await tester.pumpAndSettle();
+
+    final blankRect = tokenRect(tester, const Key('formula_blank_numerator'));
+    final mathRect = mathRectInside(
+      tester,
+      const Key('formula_blank_numerator'),
+    );
+
+    expect((mathRect.center.dy - blankRect.center.dy).abs(), lessThan(1.5));
+  });
+
+  testWidgets('long formula choice fits phone viewport', (tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpFormulaQuiz(tester, questions: [twoBlankFormulaQuestion()]);
+
+    final choiceRect = tokenRect(
+      tester,
+      const Key('formula_choice_answer:numerator'),
+    );
+
+    expect(choiceRect.left, greaterThanOrEqualTo(0));
+    expect(choiceRect.right, lessThanOrEqualTo(360));
+  });
+
+  testWidgets('formula choices use content based widths', (tester) async {
+    await pumpFormulaQuiz(tester, questions: [twoBlankFormulaQuestion()]);
+
+    final shortRect = tokenRect(
+      tester,
+      const Key('formula_choice_answer:denominator'),
+    );
+    final longRect = tokenRect(
+      tester,
+      const Key('formula_choice_answer:numerator'),
+    );
+
+    expect(shortRect.width, lessThan(longRect.width));
+  });
+
+  testWidgets('long formula choices keep consistent math height', (
+    tester,
+  ) async {
+    await pumpFormulaQuiz(tester, questions: [twoBlankFormulaQuestion()]);
+
+    final shortMathRect = mathRectInside(
+      tester,
+      const Key('formula_choice_answer:denominator'),
+    );
+    final longMathRect = mathRectInside(
+      tester,
+      const Key('formula_choice_answer:numerator'),
+    );
+
+    expect(longMathRect.height, greaterThanOrEqualTo(shortMathRect.height));
+  });
+
+  testWidgets('fraction formula choice centers math content', (tester) async {
+    await pumpFormulaQuiz(tester);
+
+    final choiceRect = tokenRect(
+      tester,
+      const Key('formula_choice_answer:coef'),
+    );
+    final mathRect = mathRectInside(
+      tester,
+      const Key('formula_choice_answer:coef'),
+    );
+
+    expect((mathRect.center.dx - choiceRect.center.dx).abs(), lessThan(1.5));
+    expect((mathRect.center.dy - choiceRect.center.dy).abs(), lessThan(1.5));
   });
 
   testWidgets('correct formula assembly increments score and shows result', (

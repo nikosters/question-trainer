@@ -687,19 +687,33 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   List<_FormulaDisplayGroup> _formulaDisplayGroups(List<FormulaPart> parts) {
-    return [
-      _FormulaDisplayGroup(
-        index: 0,
-        items: parts
-            .asMap()
-            .entries
-            .map(
-              (entry) =>
-                  _FormulaDisplayItem(index: entry.key, part: entry.value),
-            )
-            .toList(growable: false),
-      ),
-    ];
+    final groups = <_FormulaDisplayGroup>[];
+    var currentItems = <_FormulaDisplayItem>[];
+    var groupIndex = 0;
+
+    for (var index = 0; index < parts.length; index += 1) {
+      final part = parts[index];
+      final startsFractionTail =
+          part.latex == '/' &&
+          index + 1 < parts.length &&
+          parts[index + 1].blankId != null;
+
+      if (startsFractionTail && currentItems.isNotEmpty) {
+        groups.add(
+          _FormulaDisplayGroup(index: groupIndex, items: currentItems),
+        );
+        groupIndex += 1;
+        currentItems = <_FormulaDisplayItem>[];
+      }
+
+      currentItems.add(_FormulaDisplayItem(index: index, part: part));
+    }
+
+    if (currentItems.isNotEmpty) {
+      groups.add(_FormulaDisplayGroup(index: groupIndex, items: currentItems));
+    }
+
+    return groups;
   }
 
   void _showMessage(String message) {
@@ -730,20 +744,23 @@ class _QuizPageState extends State<QuizPage> {
     Key? key,
     VoidCallback? onTap,
   }) {
-    final content = Container(
-      key: key,
-      constraints: BoxConstraints(
-        minWidth: minWidth ?? 0,
-        minHeight: _formulaTokenMinHeight,
-        maxWidth: maxWidth,
+    final content = IntrinsicWidth(
+      child: Container(
+        key: key,
+        constraints: BoxConstraints(
+          minWidth: minWidth ?? 0,
+          minHeight: _formulaTokenMinHeight,
+          maxWidth: maxWidth,
+        ),
+        padding: padding,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          border: border,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: child,
       ),
-      padding: padding,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: border,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(widthFactor: 1, heightFactor: 1, child: child),
     );
 
     if (onTap == null) {
@@ -766,14 +783,13 @@ class _QuizPageState extends State<QuizPage> {
     return Padding(
       key: Key('formula_fixed_$index'),
       padding: EdgeInsets.symmetric(horizontal: _formulaLatexInset(latex)),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: _formulaTokenMinHeight,
-          maxWidth: maxWidth,
-        ),
-        child: Center(
-          widthFactor: 1,
-          heightFactor: 1,
+      child: IntrinsicWidth(
+        child: Container(
+          constraints: BoxConstraints(
+            minHeight: _formulaTokenMinHeight,
+            maxWidth: maxWidth,
+          ),
+          alignment: Alignment.center,
           child: _buildMathFragment(
             latex,
             style: Theme.of(context).textTheme.titleLarge,
@@ -795,6 +811,18 @@ class _QuizPageState extends State<QuizPage> {
         }.contains(latex.trim())
         ? 4
         : 1;
+  }
+
+  double _formulaContentMinWidth(String latex, TextStyle? style) {
+    final fontSize = style?.fontSize ?? 20;
+    final normalized = latex
+        .replaceAll(RegExp(r'\\frac\{([^}]*)\}\{([^}]*)\}'), r'$1 $2')
+        .replaceAll(RegExp(r'\\sqrt\{([^}]*)\}'), r'√ $1')
+        .replaceAll(RegExp(r'\\[a-zA-Z]+'), '  ')
+        .replaceAll(RegExp(r'[{}_^]'), '')
+        .trim();
+    final units = normalized.isEmpty ? latex.length : normalized.length;
+    return (units * fontSize * 0.68).clamp(_formulaBlankSize, 240);
   }
 
   Widget _buildFormulaBlankToken({
@@ -832,24 +860,64 @@ class _QuizPageState extends State<QuizPage> {
     return _buildFormulaToken(
       key: Key('formula_blank_$blankId'),
       maxWidth: maxWidth,
-      minWidth: _formulaBlankSize,
-      padding: const EdgeInsets.all(4),
+      minWidth: displayedLatex == null
+          ? _formulaBlankSize
+          : min(
+              maxWidth,
+              _formulaContentMinWidth(
+                    displayedLatex,
+                    Theme.of(context).textTheme.titleLarge,
+                  ) +
+                  32,
+            ),
+      padding: EdgeInsets.symmetric(
+        horizontal: displayedLatex == null ? 4 : 16,
+        vertical: 4,
+      ),
       backgroundColor: backgroundColor,
       border: Border.all(color: borderColor),
       onTap: answered ? null : () => _selectFormulaBlank(blankId),
-      child: SizedBox(
-        width: _formulaBlankSize - 10,
-        height: _formulaBlankSize - 10,
-        child: Center(
-          child: displayedLatex == null
-              ? const SizedBox(width: 28, height: 18)
-              : FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: _buildMathFragment(
-                    displayedLatex,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
+      child: displayedLatex == null
+          ? const SizedBox(width: 28, height: 18)
+          : _buildMathFragment(
+              displayedLatex,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+    );
+  }
+
+  Widget _buildFormulaChoice({
+    required BuildContext context,
+    required String choiceId,
+    required String latex,
+    required double maxWidth,
+  }) {
+    final enabled = _selectedBlankId != null;
+    final colorScheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.bodyLarge;
+
+    return ConstrainedBox(
+      key: Key('formula_choice_$choiceId'),
+      constraints: BoxConstraints(
+        minWidth: min(maxWidth, _formulaContentMinWidth(latex, style) + 24),
+        minHeight: 40,
+        maxWidth: maxWidth,
+      ),
+      child: IntrinsicWidth(
+        child: Material(
+          color: enabled
+              ? colorScheme.surfaceContainerHighest
+              : colorScheme.onSurface.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: enabled ? () => _selectFormulaChoice(choiceId) : null,
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: _buildMathFragment(latex, style: style),
+            ),
+          ),
         ),
       ),
     );
@@ -1006,22 +1074,23 @@ class _QuizPageState extends State<QuizPage> {
         ),
         if (!answered) ...[
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: availableChoiceIds
-                .map((choiceId) {
-                  return ActionChip(
-                    key: Key('formula_choice_$choiceId'),
-                    label: _buildMathFragment(
-                      current.displayForChoiceId(choiceId),
-                    ),
-                    onPressed: _selectedBlankId == null
-                        ? null
-                        : () => _selectFormulaChoice(choiceId),
-                  );
-                })
-                .toList(growable: false),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: availableChoiceIds
+                    .map((choiceId) {
+                      return _buildFormulaChoice(
+                        context: context,
+                        choiceId: choiceId,
+                        latex: current.displayForChoiceId(choiceId),
+                        maxWidth: constraints.maxWidth,
+                      );
+                    })
+                    .toList(growable: false),
+              );
+            },
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
