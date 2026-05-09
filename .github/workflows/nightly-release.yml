@@ -1,21 +1,16 @@
-name: Release Android APK
+name: Nightly Android APK
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release tag, например v1.0.0"
-        required: true
-        type: string
+    branches:
+      - main
 
 permissions:
   contents: write
 
-env:
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+concurrency:
+  group: nightly-release
+  cancel-in-progress: true
 
 jobs:
   android:
@@ -25,8 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -43,6 +36,15 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
 
       - name: Decode Android keystore
         env:
@@ -72,19 +74,42 @@ jobs:
 
       - name: Prepare artifact
         run: |
-          VERSION="${RELEASE_TAG#v}"
-          cp build/app/outputs/flutter-apk/app-release.apk "question-trainer-v${VERSION}-android-universal.apk"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          NIGHTLY_VERSION="nightly.$(date -u +%Y%m%d).${SHORT_SHA}"
+          echo "NIGHTLY_VERSION=$NIGHTLY_VERSION" >> "$GITHUB_ENV"
+          cp build/app/outputs/flutter-apk/app-release.apk "question-trainer-${NIGHTLY_VERSION}-android-universal.apk"
 
-      - name: Publish GitHub Release
+      - name: Publish GitHub pre-release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: nightly
+          RELEASE_TITLE: Тренажёр заданий nightly
         run: |
-          VERSION="${RELEASE_TAG#v}"
-          ARTIFACT="question-trainer-v${VERSION}-android-universal.apk"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          ARTIFACT="question-trainer-${NIGHTLY_VERSION}-android-universal.apk"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          NOTES="$(mktemp)"
+          {
+            echo "Nightly Android APK."
+            echo
+            echo "- Branch: ${GITHUB_REF_NAME}"
+            echo "- Build: ${NIGHTLY_VERSION}"
+            echo "- Commit: ${SHORT_SHA}"
+            echo "- Workflow run: ${RUN_URL}"
+          } > "$NOTES"
+
+          git tag --force "$RELEASE_TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/${RELEASE_TAG}"
+
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$ARTIFACT" --clobber
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file "$NOTES" \
+              --prerelease
+            gh release upload "$RELEASE_TAG" "$ARTIFACT"
           else
             gh release create "$RELEASE_TAG" "$ARTIFACT" \
-              --title "Тренажёр заданий $RELEASE_TAG" \
-              --notes "Android APK для установки из GitHub Releases."
+              --title "$RELEASE_TITLE" \
+              --notes-file "$NOTES" \
+              --prerelease
           fi
