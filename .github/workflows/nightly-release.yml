@@ -3,7 +3,7 @@ name: Nightly Android APK
 on:
   push:
     branches:
-      - nightly
+      - main
 
 permissions:
   contents: write
@@ -73,22 +73,27 @@ jobs:
         run: flutter build apk --release
 
       - name: Prepare artifact
-        run: cp build/app/outputs/flutter-apk/app-release.apk question-trainer-nightly-android-universal.apk
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          NIGHTLY_VERSION="nightly.$(date -u +%Y%m%d).${SHORT_SHA}"
+          echo "NIGHTLY_VERSION=$NIGHTLY_VERSION" >> "$GITHUB_ENV"
+          cp build/app/outputs/flutter-apk/app-release.apk "question-trainer-${NIGHTLY_VERSION}-android-universal.apk"
 
       - name: Publish GitHub pre-release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: nightly
           RELEASE_TITLE: Тренажёр заданий nightly
-          ARTIFACT: question-trainer-nightly-android-universal.apk
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
+          ARTIFACT="question-trainer-${NIGHTLY_VERSION}-android-universal.apk"
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           NOTES="$(mktemp)"
           {
             echo "Nightly Android APK."
             echo
             echo "- Branch: ${GITHUB_REF_NAME}"
+            echo "- Build: ${NIGHTLY_VERSION}"
             echo "- Commit: ${SHORT_SHA}"
             echo "- Workflow run: ${RUN_URL}"
           } > "$NOTES"
@@ -101,7 +106,7 @@ jobs:
               --title "$RELEASE_TITLE" \
               --notes-file "$NOTES" \
               --prerelease
-            gh release upload "$RELEASE_TAG" "$ARTIFACT" --clobber
+            gh release upload "$RELEASE_TAG" "$ARTIFACT"
           else
             gh release create "$RELEASE_TAG" "$ARTIFACT" \
               --title "$RELEASE_TITLE" \
